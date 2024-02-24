@@ -1,0 +1,324 @@
+﻿@using TaskManagementApplication.Models
+@model List<TaskModel>;
+
+@{
+    ViewData["Title"] = "Tasks";
+    List<TaskModel> TaskList = Model;
+    var values = Enum.GetValues(typeof(Enums.Enums.TaskStatus)).Cast<Enums.Enums.TaskStatus>()
+                          .Select(e => new SelectListItem
+                                  {
+                                      Text = e.ToString(),
+                                      Value = e.ToString()
+                                  });
+    SelectList statusList = new SelectList(values, "Value", "Text");
+}
+
+<input type="button" id="AddNewTaskButton" value="New Task" class="btn btn-success button" />
+<input type="button" value="Refresh" class="btn btn-warning button" onclick="location.reload()" />
+@if (!TaskList.Any())
+{
+    <h1>there is no tasks</h1>
+}
+else
+{
+    <h1>Task list:</h1>
+    <table>
+        <tr>
+            <th>Id</th>
+            <th>Name</th>
+            <th>Due Date</th>
+            <th>Status</th>
+            <th>Description</th>
+        </tr>
+            @foreach (TaskModel taks in TaskList)
+            {
+            <tr class="row-style">
+                <td class="cell-style">@taks.Id</td>
+                <td class="cell-style task-name-title">@taks.Name</td>
+                <td class="cell-style">@taks.DueDate.ToString("dd-MM-yyyy")</td>
+                <td class="cell-style">@taks.Status</td>
+                <td class="cell-style task-description-title">@taks.Description</td>
+                <td data-task-id="@taks.Id" 
+                    data-task-name="@taks.Name"
+                    data-task-duedate="@taks.DueDate.ToString("yyyy-MM-dd")"
+                    data-task-status="@taks.Status"
+                    data-task-description="@taks.Description">
+                    <input type="button" value="Edit" class="edit-task-button btn btn-primary button" />
+                    <br />
+                    <input type="button" 
+                           value="Delete" 
+                           class="delete-button btn btn-danger button" />
+                </td>
+            </tr>
+            }
+    </table>
+}
+<div id="TaskModal" 
+     class="modal" 
+     data-upsert-task="@Url.Action("UpsertTask", "Task")"
+     data-delete-task="@Url.Action("DeleteTask", "Task")">
+
+    <!-- Task Modal content -->
+    <div class="modal-content">
+        <span class="close">&times;</span>
+        <span class="task-id">Id</span>
+        <input id="TaskId" type="text" class="task-id" disabled />
+        <span>Name</span>
+        <input id="TaskName" type="text" class="field-to-validate" />
+        <span>Due Date</span>
+        <input id="TaskDueDate" type="date" class="field-to-validate" placeholder="Select date and time" />
+        <label for="TaskDescription">Description</label>
+        <textarea id="TaskDescription" name="TaskDescription" class="field-to-validate"></textarea>
+        <span>Status</span>
+        <select id="TaskStatus" name="TaskStatus" asp-items="statusList">
+        </select>
+        <br />
+        <input type="button" id="SaveTaskButton" value="Save" class="btn btn-success button" />
+    </div>
+</div>
+<style>
+    .button {
+        width: 95px;
+    }
+
+    .row-style:hover {
+        background-color: lightgrey;
+    }
+
+    .cell-style {
+        border-color: blueviolet;
+        border-style: solid;
+        border-width: 1px;
+        max-width: 100px;
+        overflow: hidden;
+        padding: 5px;
+        text-align: center;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    /* The Modal (background) */
+    .modal {
+        background-color: rgb(0,0,0);
+        background-color: rgba(0,0,0,0.4); 
+        display: none;
+        height: 100%;
+        left: 0;
+        overflow: auto;
+        position: fixed;
+        top: 0;
+        width: 100%;
+        z-index: 1;
+    }
+
+    /* Modal Content/Box */
+    .modal-content {
+        background-color: #fefefe;
+        border: 1px solid #888;
+        height: 95%;
+        margin: 1% auto;
+        padding: 20px;
+        width: 98%;
+    }
+
+    /* The Close Button */
+    .close {
+        color: #aaa;
+        float: right;
+        font-size: 28px;
+        font-weight: bold;
+        height: 40px;
+        width: 20px;
+    }
+
+    .close:hover,
+    .close:focus {
+        color: black;
+        cursor: pointer;
+        text-decoration: none;
+    }
+
+    .task-name-title {
+        min-width: 300px;
+    }
+
+    .task-description-title {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        min-width: 500px;
+        white-space: nowrap;
+    }
+
+    .empty-field-warning {
+        border-color: red;
+    }
+
+    .task-id {
+        width: fit-content;
+        display: none;
+    }
+
+    #TaskDueDate {
+        width: fit-content;
+    }
+
+    #TaskDescription {
+        min-height: 350px;
+    }
+</style>
+
+<script>
+    $(document).ready(function () {
+        $("#AddNewTaskButton").on("click", function () {
+            openTaskModal("", "", "", "", "Created");
+        });
+
+        $(".edit-task-button").on("click", function () {
+            var parent = $(this).parent();
+            openTaskModal($(parent).data("task-id"),
+                          $(parent).data("task-name"),
+                          $(parent).data("task-duedate"),
+                          $(parent).data("task-description"),
+                          $(parent).data("task-status"));
+        });
+
+        $(".delete-button").on("click", function () {
+            if (confirm("Are you sure you want to delete this task? \n"
+                + "Id=" + $(this).parent().data("task-id") + ", Name=" + $(this).parent().data("task-name"))) {
+                deleteTask($(this).parent().data("task-id"));
+            }
+        });
+
+        $("#SaveTaskButton").on("click", function () {
+            upsertTask($("#TaskId").val(), $("#TaskName").val(), $("#TaskDueDate").val(), $("#TaskDescription").val(), $("#TaskStatus").val())
+        });
+
+        $(".field-to-validate").on("input", function () {
+            if (!this.value) {
+                $(this).addClass("empty-field-warning");
+            }
+            else {
+                $(this).removeClass("empty-field-warning");
+            }
+        });
+    });
+
+    function openTaskModal(id, name, dueDate, description, status) {
+        var modal = $("#TaskModal");
+        var span = $(".close");
+
+        $("#TaskId").val(id);
+        $("#TaskName").val(name);
+        $("#TaskDueDate").val(dueDate);
+        $("#TaskDescription").val(description);
+        $("#TaskStatus").val(status);
+
+        $(modal).addClass("open");
+        modal.css("display", "block");
+
+        if (id != "") {
+            $(".task-id").show();
+        }
+
+        $(".field-to-validate").trigger("input");
+
+        // When the user clicks on <span> (x), close the modal
+        span.click(function () {
+            if (verifyExitModal()) {
+                closeTaskModal();
+            }
+        });
+
+        // When the user clicks anywhere outside of the modal, close it
+        $(window).click(function (event) {
+            if (event.target === modal[0] && verifyExitModal()) {
+                closeTaskModal();
+            }
+        });
+
+        // Close the modal when pressing ESC key
+        $(document).keydown(function (e) {
+            if (e.keyCode === 27 && $(modal).hasClass("open") && verifyExitModal()) {
+                closeTaskModal();
+            }
+        });
+    }    
+
+    function upsertTask(id, name, dueDate, description, status) {
+        if (verifyFieldsValidity(name, dueDate, description) && validateDueDate(dueDate)) {
+            const url = $("#TaskModal").data("upsert-task");
+            var fromData = {
+                Id: id,
+                Name: name,
+                DueDate: dueDate,
+                Description: description,
+                Status: status
+            };
+
+            ajaxCall(url, fromData);
+        }
+    }
+
+    function deleteTask(id) {
+        if (id  > 0) {
+            const url = $("#TaskModal").data("delete-task");
+            ajaxCall(url, {id: id});
+        }
+    }
+
+    function ajaxCall(url, fromData) {
+        $.ajax({
+            type: "POST",
+            url: url,
+            data: fromData,
+            success: function (response) {
+                console.log("Success:", response);
+                location.reload();
+            },
+            error: function (error) {
+                console.log("Error:", error);
+                alert("Failed to save changes.\n"
+                    + "Error message: " + error);
+            }
+        });
+    }
+
+    function closeTaskModal(modal) {
+        var modal = $("#TaskModal");
+        modal.css("display", "none");
+        $(modal).removeClass("open");
+    }
+
+    function verifyExitModal() {
+        if (confirm("Any unsaved data will be lost!\nAre you sure you want to exit?")) {
+            return true;
+        }
+
+        return false;
+    }
+
+    function verifyFieldsValidity(name, dueDate, description) {
+        if (name == "" || dueDate == "" || description == "") {
+            alert("Name, Due Date and Description couldn't be empty!");
+            return false;
+        }
+
+        return true;
+    }
+
+    function validateDueDate(dueDate) {
+        var now = new Date();
+        var currentDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        var dateParameters = dueDate.split("-")
+        var selectedDate = new Date(dateParameters[0], dateParameters[1]-1, dateParameters[2]);
+
+        if (selectedDate >= currentDate) {
+            return true;
+        } 
+        else {
+            alert("Due Date should be equal/greated, than today.");
+            return false;
+        }
+    }
+</script>
+
